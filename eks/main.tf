@@ -1,7 +1,7 @@
 module "eks" {
   source  = "terraform-aws-modules/eks/aws"
   version = "18.26.6"
-  cluster_name = "pri-cluster"
+  cluster_name = "minecraft-cluster"
   cluster_version = "1.29"
 
   vpc_id = var.eks-vpc-id
@@ -17,7 +17,7 @@ module "eks" {
         min_size = 1
         max_size = 2
         desired_size = 1
-        instance_types = ["t3.micro"]
+        instance_types = ["t3a.medium"]
 
     }
   }
