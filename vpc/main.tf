@@ -53,7 +53,7 @@ resource "aws_subnet" "pub_sub1" {
 
     # 쿠버네티스 클러스터 구성시 필요한 태그
     "kubernetes.io/cluster/pri-cluster" = "owned"
-    "kubernetes.ir/role/elb" = "1"
+    "kubernetes.io/role/elb" = "1"
   }
 
   # 생성, 삭제 우선순위
@@ -74,7 +74,7 @@ resource "aws_subnet" "pub_sub2" {
 
     # 쿠버네티스 클러스터 구성시 필요한 태그
     "kubernetes.io/cluster/pri-cluster" = "owned"
-    "kubernetes.ir/role/elb" = "1"
+    "kubernetes.io/role/elb" = "1"
   }
 
   # 생성, 삭제 우선순위
@@ -97,7 +97,7 @@ resource "aws_subnet" "pri_sub1" {
 
     # 쿠버네티스 클러스터 구성시 필요한 태그
     "kubernetes.io/cluster/pri-cluster" = "owned"
-    "kubernetes.ir/role/elb" = "1"
+    "kubernetes.io/role/elb" = "1"
   }
 
   # 생성, 삭제 우선순위
@@ -117,7 +117,7 @@ resource "aws_subnet" "pri_sub2" {
 
     # 쿠버네티스 클러스터 구성시 필요한 태그
     "kubernetes.io/cluster/pri-cluster" = "owned"
-    "kubernetes.ir/role/elb" = "1"
+    "kubernetes.io/role/elb" = "1"
   }
 
   # 생성, 삭제 우선순위
