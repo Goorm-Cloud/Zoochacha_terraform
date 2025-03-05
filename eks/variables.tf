@@ -40,3 +40,8 @@ variable "pub-sub2-id" {
   description = "Public subnet 2 ID"
   type        = string
 }
+
+variable "eks-sg-id" {
+  description = "Security group ID for EKS cluster"
+  type        = string
+}

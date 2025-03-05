@@ -19,3 +19,8 @@ output "pub-sub1-id" {
 output "pub-sub2-id" {
     value = aws_subnet.pub_sub2.id
 }
+
+output "eks-sg-id" {
+  value       = aws_security_group.eks-vpc-pub-sg.id
+  description = "Security group ID for EKS cluster"
+}

@@ -39,6 +39,7 @@ resource "aws_eks_cluster" "this" {
       var.pub-sub1-id,
       var.pub-sub2-id
     ]
+    security_group_ids      = [var.eks-sg-id]
     endpoint_private_access = true
     endpoint_public_access  = true
   }
@@ -126,7 +127,7 @@ resource "aws_eks_addon" "vpc_cni" {
 resource "aws_eks_addon" "coredns" {
   cluster_name = aws_eks_cluster.this.name
   addon_name   = "coredns"
-  addon_version = "v1.11.3-eksbuild.1"
+  addon_version = "v1.11.4-eksbuild.1"
 
   tags = {
     Name = "zoochacha-eks-coredns"
