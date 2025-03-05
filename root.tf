@@ -3,7 +3,7 @@ provider "aws" {
 }
 
 module "eks-vpc" {
-    source = "./vpc"                      # 루트파일 기준 vpc 모듈파일 위치
+    source = "./vpc"
 }
 
 module "pri-cluster" {
