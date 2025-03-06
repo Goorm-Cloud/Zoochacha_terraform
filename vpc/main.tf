@@ -162,14 +162,21 @@ resource "aws_security_group" "eks-vpc-pub-sg" {
     from_port   = 443
     to_port     = 443
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]  # Anywhere-IPv4로 수정
+    cidr_blocks = ["0.0.0.0/0"]
   }
 
   ingress {
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]  # Anywhere-IPv4로 수정
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
   }
 
   egress {
@@ -181,45 +188,6 @@ resource "aws_security_group" "eks-vpc-pub-sg" {
 
   tags = {
     Name = "zoochacha-eks-sg"
-  }
-}
-
-# http 인그리스 허용
-resource "aws_security_group_rule" "eks-vpc-http-ingress" {
-  type = "ingress"    # 보안그룹의 인바운드 규칙
-  from_port = 80
-  to_port = 80
-  protocol = "TCP"
-  cidr_blocks = [ "0.0.0.0/0" ]
-  security_group_id = aws_security_group.eks-vpc-pub-sg.id
-  lifecycle {
-    create_before_destroy = true
-  }
-}
-
-# ssh 인그리스 허용
-resource "aws_security_group_rule" "eks-vpc-ssh-ingress" {
-  type = "ingress"    # 보안그룹의 인바운드 규칙
-  from_port = 22
-  to_port = 22
-  protocol = "TCP"
-  cidr_blocks = [ "0.0.0.0/0" ]
-  security_group_id = aws_security_group.eks-vpc-pub-sg.id
-  lifecycle {
-    create_before_destroy = true
-  }
-}
-
-# 이그리스 허용
-resource "aws_security_group_rule" "eks-vpc-all-engress" {
-  type = "egress"    # 보안그룹의 아웃바운드 규칙
-  from_port = 0
-  to_port = 0
-  protocol = "-1"
-  cidr_blocks = [ "0.0.0.0/0" ]
-  security_group_id = aws_security_group.eks-vpc-pub-sg.id
-  lifecycle {
-    create_before_destroy = true
   }
 }
 

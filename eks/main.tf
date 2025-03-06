@@ -2,6 +2,15 @@ provider "aws" {
   region = var.aws_region
 }
 
+# VPC 모듈 참조
+data "terraform_remote_state" "vpc" {
+  backend = "local"
+
+  config = {
+    path = "../vpc/terraform.tfstate"
+  }
+}
+
 # EKS Cluster IAM Role
 resource "aws_iam_role" "eks_cluster_role" {
   name = "zoochacha-eks-cluster-role"
@@ -34,12 +43,12 @@ resource "aws_eks_cluster" "this" {
 
   vpc_config {
     subnet_ids = [
-      var.pri-sub1-id,
-      var.pri-sub2-id,
-      var.pub-sub1-id,
-      var.pub-sub2-id
+      data.terraform_remote_state.vpc.outputs.pri-sub1-id,
+      data.terraform_remote_state.vpc.outputs.pri-sub2-id,
+      data.terraform_remote_state.vpc.outputs.pub-sub1-id,
+      data.terraform_remote_state.vpc.outputs.pub-sub2-id
     ]
-    security_group_ids      = [var.eks-sg-id]
+    security_group_ids      = [data.terraform_remote_state.vpc.outputs.eks-sg-id]
     endpoint_private_access = true
     endpoint_public_access  = true
   }
@@ -92,7 +101,10 @@ resource "aws_eks_node_group" "this" {
   cluster_name    = aws_eks_cluster.this.name
   node_group_name = "zoochacha-node-group"
   node_role_arn   = aws_iam_role.eks_node_group_role.arn
-  subnet_ids      = [var.pri-sub1-id, var.pri-sub2-id]
+  subnet_ids      = [
+    data.terraform_remote_state.vpc.outputs.pri-sub1-id,
+    data.terraform_remote_state.vpc.outputs.pri-sub2-id
+  ]
 
   scaling_config {
     desired_size = 2
