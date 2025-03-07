@@ -88,6 +88,10 @@ resource "aws_eip" "nat" {
   tags = {
     Name = "zoochacha-eks-nat-ip"
   }
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 # NAT Gateway
@@ -97,6 +101,10 @@ resource "aws_nat_gateway" "this" {
 
   tags = {
     Name = "zoochacha-eks-nat"
+  }
+
+  lifecycle {
+    create_before_destroy = true
   }
 }
 
@@ -112,6 +120,10 @@ resource "aws_route_table" "pub_rt" {
   tags = {
     Name = "zoochacha-pub-rt"
   }
+
+  lifecycle {
+    create_before_destroy = false
+  }
 }
 
 # Private Route Table
@@ -126,30 +138,54 @@ resource "aws_route_table" "pri_rt" {
   tags = {
     Name = "zoochacha-pri-rt"
   }
+
+  lifecycle {
+    create_before_destroy = false
+  }
 }
 
 # Route Table Association - Public Subnet 1
 resource "aws_route_table_association" "pub_sub1_association" {
   subnet_id      = aws_subnet.pub_sub1.id
   route_table_id = aws_route_table.pub_rt.id
+
+  depends_on = [aws_route_table.pub_rt, aws_subnet.pub_sub1]
+  lifecycle {
+    create_before_destroy = false
+  }
 }
 
 # Route Table Association - Public Subnet 2
 resource "aws_route_table_association" "pub_sub2_association" {
   subnet_id      = aws_subnet.pub_sub2.id
   route_table_id = aws_route_table.pub_rt.id
+
+  depends_on = [aws_route_table.pub_rt, aws_subnet.pub_sub2]
+  lifecycle {
+    create_before_destroy = false
+  }
 }
 
 # Route Table Association - Private Subnet 1
 resource "aws_route_table_association" "pri_sub1_association" {
   subnet_id      = aws_subnet.pri_sub1.id
   route_table_id = aws_route_table.pri_rt.id
+
+  depends_on = [aws_route_table.pri_rt, aws_subnet.pri_sub1]
+  lifecycle {
+    create_before_destroy = false
+  }
 }
 
 # Route Table Association - Private Subnet 2
 resource "aws_route_table_association" "pri_sub2_association" {
   subnet_id      = aws_subnet.pri_sub2.id
   route_table_id = aws_route_table.pri_rt.id
+
+  depends_on = [aws_route_table.pri_rt, aws_subnet.pri_sub2]
+  lifecycle {
+    create_before_destroy = false
+  }
 }
 
 # 보안그룹 생성
@@ -188,6 +224,10 @@ resource "aws_security_group" "eks-vpc-pub-sg" {
 
   tags = {
     Name = "zoochacha-eks-sg"
+  }
+
+  lifecycle {
+    create_before_destroy = true
   }
 }
 
