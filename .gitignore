@@ -40,4 +40,12 @@ override.tf.json
 .terraformrc
 terraform.rc
 
+*.pem
+*.crt
+*.key
+*.csr
+*.csr.pem
+*.csr.pem.txt
+*.csr.pem.txt.txt
+
 # End of https://www.toptal.com/developers/gitignore/api/terraform

@@ -1,47 +1,32 @@
 variable "aws_region" {
-  description = "AWS region"
+  description = "AWS 리전"
   type        = string
   default     = "ap-northeast-2"
 }
 
 variable "cluster_name" {
-  description = "Name of the EKS cluster"
+  description = "EKS 클러스터 이름"
   type        = string
   default     = "zoochacha-eks-cluster"
 }
 
 variable "cluster_version" {
-  description = "Kubernetes version to use for the EKS cluster"
+  description = "EKS 클러스터 버전"
   type        = string
   default     = "1.31"
 }
 
-variable "eks-vpc-id" {
-  description = "VPC ID for EKS cluster"
+variable "vpc_id" {
+  description = "VPC ID"
   type        = string
 }
 
-variable "pri-sub1-id" {
-  description = "Private subnet 1 ID"
-  type        = string
+variable "private_subnet_ids" {
+  description = "프라이빗 서브넷 ID 목록"
+  type        = list(string)
 }
 
-variable "pri-sub2-id" {
-  description = "Private subnet 2 ID"
-  type        = string
-}
-
-variable "pub-sub1-id" {
-  description = "Public subnet 1 ID"
-  type        = string
-}
-
-variable "pub-sub2-id" {
-  description = "Public subnet 2 ID"
-  type        = string
-}
-
-variable "eks-sg-id" {
-  description = "Security group ID for EKS cluster"
-  type        = string
-}
+variable "public_subnet_ids" {
+  description = "퍼블릭 서브넷 ID 목록"
+  type        = list(string)
+} 

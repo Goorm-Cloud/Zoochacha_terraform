@@ -1,0 +1,68 @@
+jenkins:
+  securityRealm:
+    local:
+      allowsSignup: false
+      users:
+        - id: "zoochacha"
+          password: "1111"
+  
+  authorizationStrategy:
+    globalMatrix:
+      permissions:
+        - "Overall/Administer:zoochacha"
+        - "Overall/Read:authenticated"
+  
+  numExecutors: 2  # 동시 실행 가능한 빌드 수
+  
+  systemMessage: "Jenkins Test Server"  # 대시보드에 표시될 메시지
+  
+  globalJobDslSecurityConfiguration:
+    useScriptSecurity: true
+  
+  unclassified:
+    location:
+      url: "${JENKINS_URL}"  # Jenkins URL - 환경 변수로 대체
+    
+    buildDiscarders:
+      configuredBuildDiscarders:
+        - "jobBuildDiscarder":
+            daysToKeep: 30
+            numToKeep: 10
+    
+    globalTimeOutConfiguration:
+      operations:
+        - "abortOperation"
+      overwriteable: true
+  
+  security:
+    globalJobDslSecurityConfiguration:
+      useScriptSecurity: true
+    csrf:
+      defaultCrumbIssuer:
+        exclude:
+          fromWindows: false
+  
+  tool:
+    git:
+      installations:
+        - name: "Default"
+          home: "git"
+  
+  jobs:
+    - script: >
+        pipelineJob("example-pipeline") {
+          definition {
+            cps {
+              script("""pipeline {
+                agent any
+                stages {
+                  stage("Example") {
+                    steps {
+                      echo "Hello World"
+                    }
+                  }
+                }
+              }""")
+            }
+          }
+        } 

@@ -19,12 +19,12 @@ terraform{
 
 # VPC
 resource "aws_vpc" "this" {
-  cidr_block           = "10.0.0.0/16"
+  cidr_block           = "10.1.0.0/16"
   enable_dns_hostnames = true
   enable_dns_support   = true
 
   tags = {
-    Name = "zoochacha-eks-vpc"
+    Name = "zoochacha-vpc"
   }
 }
 
@@ -40,44 +40,48 @@ resource "aws_internet_gateway" "this" {
 # Public Subnet 1
 resource "aws_subnet" "pub_sub1" {
   vpc_id            = aws_vpc.this.id
-  cidr_block        = "10.0.1.0/24"
+  cidr_block        = "10.1.1.0/24"
   availability_zone = "ap-northeast-2a"
 
   tags = {
     Name = "zoochacha-pub-sub1"
+    Type = "public"
   }
 }
 
 # Public Subnet 2
 resource "aws_subnet" "pub_sub2" {
   vpc_id            = aws_vpc.this.id
-  cidr_block        = "10.0.2.0/24"
+  cidr_block        = "10.1.2.0/24"
   availability_zone = "ap-northeast-2c"
 
   tags = {
     Name = "zoochacha-pub-sub2"
+    Type = "public"
   }
 }
 
 # Private Subnet 1
 resource "aws_subnet" "pri_sub1" {
   vpc_id            = aws_vpc.this.id
-  cidr_block        = "10.0.3.0/24"
+  cidr_block        = "10.1.3.0/24"
   availability_zone = "ap-northeast-2a"
 
   tags = {
     Name = "zoochacha-pri-sub1"
+    Type = "private"
   }
 }
 
 # Private Subnet 2
 resource "aws_subnet" "pri_sub2" {
   vpc_id            = aws_vpc.this.id
-  cidr_block        = "10.0.4.0/24"
+  cidr_block        = "10.1.4.0/24"
   availability_zone = "ap-northeast-2c"
 
   tags = {
     Name = "zoochacha-pri-sub2"
+    Type = "private"
   }
 }
 
@@ -202,6 +206,14 @@ resource "aws_security_group" "eks-vpc-pub-sg" {
   }
 
   ingress {
+    from_port   = 10250
+    to_port     = 10250
+    protocol    = "tcp"
+    cidr_blocks = [aws_vpc.this.cidr_block]
+    description = "Kubelet API"
+  }
+
+  ingress {
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
@@ -213,6 +225,15 @@ resource "aws_security_group" "eks-vpc-pub-sg" {
     to_port     = 80
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  # 노드 간 통신을 위한 모든 트래픽 허용
+  ingress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = [aws_vpc.this.cidr_block]
+    description = "Allow all internal traffic"
   }
 
   egress {

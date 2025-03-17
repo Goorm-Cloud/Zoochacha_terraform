@@ -173,6 +173,82 @@ delete_nat_gateways() {
     fi
 }
 
+# VPC 생성 완료 확인 함수
+wait_for_vpc() {
+    log_info "VPC 생성 완료 대기 중..."
+    while true; do
+        vpc_id=$(aws ec2 describe-vpcs --filters "Name=tag:Name,Values=zoochacha-vpc" --query 'Vpcs[0].VpcId' --output text)
+        if [ "$vpc_id" != "None" ] && [ ! -z "$vpc_id" ]; then
+            # 서브넷 확인
+            subnet_count=$(aws ec2 describe-subnets --filters "Name=vpc-id,Values=$vpc_id" --query 'length(Subnets)' --output text)
+            if [ "$subnet_count" -eq 4 ]; then
+                # 보안 그룹 확인
+                sg_id=$(aws ec2 describe-security-groups --filters "Name=vpc-id,Values=$vpc_id" "Name=tag:Name,Values=zoochacha-eks-sg" --query 'SecurityGroups[0].GroupId' --output text)
+                if [ "$sg_id" != "None" ] && [ ! -z "$sg_id" ]; then
+                    log_info "VPC와 모든 관련 리소스가 준비되었습니다"
+                    return 0
+                fi
+            fi
+        fi
+        log_warn "VPC 또는 관련 리소스가 아직 준비되지 않았습니다. 10초 후 다시 확인합니다"
+        sleep 10
+    done
+}
+
+# EKS 클러스터 상태 확인 함수
+wait_for_eks_cluster() {
+    log_info "EKS 클러스터 상태 확인 중..."
+    
+    # 클러스터가 이미 ACTIVE 상태인지 확인
+    if aws eks describe-cluster --name zoochacha-eks-cluster --query 'cluster.status' --output text 2>/dev/null | grep -q ACTIVE; then
+        log_info "EKS 클러스터가 이미 ACTIVE 상태입니다"
+        return 0
+    fi
+
+    # 새로 생성된 경우에만 대기
+    log_info "EKS 클러스터 생성 시작... 초기 8분 30초 대기"
+    sleep 510  # 8분 30초 = 510초
+    
+    log_info "EKS 클러스터 생성 완료 대기 중..."
+    while true; do
+        if aws eks describe-cluster --name zoochacha-eks-cluster --query 'cluster.status' --output text 2>/dev/null | grep -q ACTIVE; then
+            log_info "EKS 클러스터가 성공적으로 생성되었습니다"
+            return 0
+        fi
+        log_warn "EKS 클러스터가 아직 생성 중입니다. 10초 후 다시 확인합니다"
+        sleep 10
+    done
+}
+
+# IAM 역할 삭제 함수
+delete_iam_roles() {
+    log_info "IAM 역할 삭제 시작..."
+    
+    # EKS 노드 그룹 IAM 역할 정책 디태치
+    log_info "노드 그룹 IAM 역할 정책 디태치 중..."
+    aws iam detach-role-policy --role-name zoochacha-eks-node-group-role --policy-arn arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy || true
+    aws iam detach-role-policy --role-name zoochacha-eks-node-group-role --policy-arn arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy || true
+    aws iam detach-role-policy --role-name zoochacha-eks-node-group-role --policy-arn arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly || true
+    
+    # EBS CSI 드라이버 IAM 역할 정책 디태치
+    log_info "EBS CSI IAM 역할 정책 디태치 중..."
+    aws iam detach-role-policy --role-name zoochacha-eks-ebs-csi-role --policy-arn arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy || true
+    
+    # EKS 클러스터 IAM 역할 정책 디태치
+    log_info "클러스터 IAM 역할 정책 디태치 중..."
+    aws iam detach-role-policy --role-name zoochacha-eks-cluster-role --policy-arn arn:aws:iam::aws:policy/AmazonEKSClusterPolicy || true
+    
+    sleep 10
+    
+    # IAM 역할 삭제
+    log_info "IAM 역할 삭제 중..."
+    aws iam delete-role --role-name zoochacha-eks-node-group-role || true
+    aws iam delete-role --role-name zoochacha-eks-ebs-csi-role || true
+    aws iam delete-role --role-name zoochacha-eks-cluster-role || true
+    
+    log_info "IAM 역할 삭제 완료"
+}
+
 # 메인 배포 함수
 deploy() {
     # VPC 배포
@@ -186,6 +262,13 @@ deploy() {
         log_warn "VPC가 이미 배포되어 있습니다"
     fi
 
+    # VPC 생성 완료 대기
+    wait_for_vpc
+    if [ $? -ne 0 ]; then
+        log_error "VPC 생성 완료 대기 실패"
+        return 1
+    fi
+
     # EKS 배포
     if ! check_terraform_state "eks"; then
         apply_terraform "eks"
@@ -197,7 +280,14 @@ deploy() {
         log_warn "EKS가 이미 배포되어 있습니다"
     fi
 
-    # Jenkins EC2 배포
+    # EKS 클러스터 생성 완료 대기
+    wait_for_eks_cluster
+    if [ $? -ne 0 ]; then
+        log_error "EKS 클러스터 생성 완료 대기 실패"
+        return 1
+    fi
+
+    # Jenkins EC2 배포 (EKS 클러스터와 병렬로 진행)
     if ! check_terraform_state "jenkins-ec2"; then
         apply_terraform "jenkins-ec2"
         if [ $? -ne 0 ]; then
@@ -207,6 +297,49 @@ deploy() {
     else
         log_warn "Jenkins EC2가 이미 배포되어 있습니다"
     fi
+
+    # kubeconfig 업데이트
+    log_info "kubeconfig 업데이트 중..."
+    aws eks update-kubeconfig --name zoochacha-eks-cluster --region ap-northeast-2
+    if [ $? -ne 0 ]; then
+        log_error "kubeconfig 업데이트 실패"
+        return 1
+    fi
+    log_info "kubeconfig 업데이트 완료"
+
+    # 노드 상태 확인
+    log_info "노드 상태 확인 중..."
+    log_info "노드가 Ready 상태가 될 때까지 대기 중..."
+    while true; do
+        NODE_STATUS=$(kubectl get nodes --no-headers 2>/dev/null | grep -v "NotReady" | grep "Ready" | wc -l)
+        if [ "$NODE_STATUS" -ge 2 ]; then
+            log_info "노드가 모두 Ready 상태입니다"
+            break
+        fi
+        log_warn "노드 준비 대기 중... (30초마다 확인)"
+        sleep 30
+    done
+
+    # 시스템 파드 상태 확인
+    log_info "시스템 파드 상태 확인 중..."
+    log_info "시스템 파드가 모두 Running 상태가 될 때까지 대기 중..."
+    while true; do
+        PENDING_PODS=$(kubectl get pods -n kube-system --no-headers 2>/dev/null | grep "Pending" | wc -l)
+        if [ "$PENDING_PODS" -eq 0 ]; then
+            log_info "모든 시스템 파드가 정상 실행 중입니다"
+            break
+        fi
+        log_warn "시스템 파드 준비 대기 중... (30초마다 확인)"
+        sleep 30
+    done
+
+    log_info "배포 상태 최종 확인"
+    log_info "노드 상태:"
+    kubectl get nodes
+    log_info "시스템 파드 상태:"
+    kubectl get pods -n kube-system
+    log_info "EKS 애드온 상태:"
+    aws eks list-addons --cluster-name zoochacha-eks-cluster
 
     log_info "모든 리소스 배포 완료"
 }
@@ -240,7 +373,11 @@ destroy() {
         delete_eks_cluster
         sleep 60
 
-        # 4. Terraform 상태 파일 정리
+        # 4. IAM 역할 삭제
+        delete_iam_roles
+        sleep 30
+
+        # 5. Terraform 상태 파일 정리
         destroy_terraform "eks"
         if [ $? -ne 0 ]; then
             log_error "EKS Terraform 상태 정리 실패"

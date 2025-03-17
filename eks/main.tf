@@ -1,20 +1,9 @@
+# 프로바이더 설정 제거
 terraform {
   required_providers {
     aws = {
       source  = "hashicorp/aws"
       version = "~> 5.0"
-    }
-    kubernetes = {
-      source  = "hashicorp/kubernetes"
-      version = "~> 2.24"
-    }
-    helm = {
-      source  = "hashicorp/helm"
-      version = "~> 2.12"
-    }
-    tls = {
-      source  = "hashicorp/tls"
-      version = "~> 4.0"
     }
   }
 }
@@ -47,60 +36,71 @@ provider "helm" {
   }
 }
 
-# VPC 모듈 참조
-data "terraform_remote_state" "vpc" {
-  backend = "local"
-
-  config = {
-    path = "../vpc/terraform.tfstate"
+# VPC 데이터 소스
+data "aws_vpc" "selected" {
+  filter {
+    name = "tag:Name"
+    values = ["zoochacha-vpc"]
   }
 }
 
-# EKS Cluster IAM Role
-resource "aws_iam_role" "eks_cluster_role" {
-  name = "zoochacha-eks-cluster-role"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Action = "sts:AssumeRole"
-        Effect = "Allow"
-        Principal = {
-          Service = "eks.amazonaws.com"
-        }
-      }
-    ]
-  })
+data "aws_subnets" "private" {
+  filter {
+    name   = "vpc-id"
+    values = [data.aws_vpc.selected.id]
+  }
+  
+  filter {
+    name   = "tag:Type"
+    values = ["private"]
+  }
 }
 
-# Attach the required AWS managed policy for EKS
-resource "aws_iam_role_policy_attachment" "eks_cluster_policy" {
-  policy_arn = "arn:aws:iam::aws:policy/AmazonEKSClusterPolicy"
-  role       = aws_iam_role.eks_cluster_role.name
+data "aws_subnets" "public" {
+  filter {
+    name   = "vpc-id"
+    values = [data.aws_vpc.selected.id]
+  }
+  
+  filter {
+    name   = "tag:Type"
+    values = ["public"]
+  }
+}
+
+data "aws_security_group" "eks" {
+  vpc_id = data.aws_vpc.selected.id
+  
+  filter {
+    name   = "tag:Name"
+    values = ["zoochacha-eks-sg"]
+  }
+}
+
+# 기존 IAM 역할 참조
+data "aws_iam_role" "eks_cluster_role" {
+  name = "zoochacha-eks-cluster-role"
+}
+
+data "aws_iam_role" "eks_node_group_role" {
+  name = "zoochacha-eks-node-group-role"
 }
 
 # EKS Cluster
 resource "aws_eks_cluster" "this" {
   name     = var.cluster_name
   version  = var.cluster_version
-  role_arn = aws_iam_role.eks_cluster_role.arn
+  role_arn = data.aws_iam_role.eks_cluster_role.arn
 
   vpc_config {
-    subnet_ids = [
-      data.terraform_remote_state.vpc.outputs.pri-sub1-id,
-      data.terraform_remote_state.vpc.outputs.pri-sub2-id,
-      data.terraform_remote_state.vpc.outputs.pub-sub1-id,
-      data.terraform_remote_state.vpc.outputs.pub-sub2-id
-    ]
-    security_group_ids      = [data.terraform_remote_state.vpc.outputs.eks-sg-id]
+    subnet_ids = concat(
+      data.aws_subnets.private.ids,
+      data.aws_subnets.public.ids
+    )
+    security_group_ids      = [data.aws_security_group.eks.id]
     endpoint_private_access = true
     endpoint_public_access  = true
   }
-
-  depends_on = [
-    aws_iam_role_policy_attachment.eks_cluster_policy,
-  ]
 
   tags = {
     Name = "zoochacha-eks-cluster"
@@ -118,9 +118,86 @@ resource "aws_iam_openid_connect_provider" "eks" {
   url             = aws_eks_cluster.this.identity[0].oidc[0].issuer
 }
 
-# EBS CSI 드라이버를 위한 IAM 역할
-resource "aws_iam_role" "ebs_csi_role" {
-  name = "zoochacha-eks-ebs-csi-role"
+# EBS CSI Driver IAM Role
+resource "aws_iam_role" "ebs_csi_driver" {
+  name = "zoochacha-eks-ebs-csi-driver"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Principal = {
+          Service = "eks.amazonaws.com"
+        }
+        Action = "sts:AssumeRole"
+      }
+    ]
+  })
+}
+
+# Attach required policy for EBS CSI Driver
+resource "aws_iam_role_policy_attachment" "ebs_csi_driver" {
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy"
+  role       = aws_iam_role.ebs_csi_driver.name
+}
+
+# EBS CSI Driver add-on
+resource "aws_eks_addon" "ebs_csi" {
+  cluster_name                = aws_eks_cluster.this.name
+  addon_name                  = "aws-ebs-csi-driver"
+  addon_version              = "v1.28.0-eksbuild.1"
+  service_account_role_arn   = aws_iam_role.ebs_csi_driver.arn
+  resolve_conflicts_on_create = "OVERWRITE"
+  resolve_conflicts_on_update = "OVERWRITE"
+}
+
+# IAM 정책 연결
+resource "aws_iam_role_policy_attachment" "eks_node_group_policy" {
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy"
+  role       = data.aws_iam_role.eks_node_group_role.name
+}
+
+resource "aws_iam_role_policy_attachment" "eks_cni_policy" {
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy"
+  role       = data.aws_iam_role.eks_node_group_role.name
+}
+
+resource "aws_iam_role_policy_attachment" "eks_container_registry" {
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
+  role       = data.aws_iam_role.eks_node_group_role.name
+}
+
+# 노드 그룹 (t3.medium 3개)
+resource "aws_eks_node_group" "this" {
+  cluster_name    = aws_eks_cluster.this.name
+  node_group_name = "zoochacha-node-group-medium"
+  node_role_arn   = data.aws_iam_role.eks_node_group_role.arn
+  subnet_ids      = data.aws_subnets.private.ids
+  instance_types  = ["t3.medium"]
+  disk_size      = 20
+
+  scaling_config {
+    desired_size = 3
+    max_size     = 4
+    min_size     = 1
+  }
+
+  update_config {
+    max_unavailable_percentage = 50
+  }
+
+  depends_on = [
+    aws_eks_cluster.this,
+    aws_iam_role_policy_attachment.eks_node_group_policy,
+    aws_iam_role_policy_attachment.eks_cni_policy,
+    aws_iam_role_policy_attachment.eks_container_registry
+  ]
+}
+
+# VPC CNI IAM Role
+resource "aws_iam_role" "vpc_cni" {
+  name = "zoochacha-eks-vpc-cni-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -133,131 +210,124 @@ resource "aws_iam_role" "ebs_csi_role" {
         Action = "sts:AssumeRoleWithWebIdentity"
         Condition = {
           StringEquals = {
-            "${replace(aws_eks_cluster.this.identity[0].oidc[0].issuer, "https://", "")}:sub": "system:serviceaccount:kube-system:ebs-csi-controller-sa"
+            "${replace(aws_eks_cluster.this.identity[0].oidc[0].issuer, "https://", "")}:sub": "system:serviceaccount:kube-system:aws-node"
+            "${replace(aws_eks_cluster.this.identity[0].oidc[0].issuer, "https://", "")}:aud": "sts.amazonaws.com"
           }
         }
       }
     ]
   })
-}
-
-# EBS CSI 드라이버를 위한 IAM 정책 연결
-resource "aws_iam_role_policy_attachment" "ebs_csi_policy" {
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy"
-  role       = aws_iam_role.ebs_csi_role.name
-}
-
-# EBS CSI 드라이버 애드온
-resource "aws_eks_addon" "ebs_csi" {
-  cluster_name = aws_eks_cluster.this.name
-  addon_name   = "aws-ebs-csi-driver"
-  addon_version = "v1.40.0-eksbuild.1"
-  service_account_role_arn = aws_iam_role.ebs_csi_role.arn
 
   tags = {
-    Name = "zoochacha-eks-ebs-csi"
+    Name = "zoochacha-eks-vpc-cni-role"
   }
 }
 
-# EKS Node Group IAM Role
-resource "aws_iam_role" "eks_node_group_role" {
-  name = "zoochacha-eks-node-group-role"
+resource "aws_iam_role_policy_attachment" "vpc_cni" {
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy"
+  role       = aws_iam_role.vpc_cni.name
+}
+
+# CoreDNS IAM Role
+resource "aws_iam_role" "coredns" {
+  name = "zoochacha-eks-coredns-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
       {
-        Action = "sts:AssumeRole"
         Effect = "Allow"
         Principal = {
-          Service = "ec2.amazonaws.com"
+          Federated = aws_iam_openid_connect_provider.eks.arn
+        }
+        Action = "sts:AssumeRoleWithWebIdentity"
+        Condition = {
+          StringEquals = {
+            "${replace(aws_eks_cluster.this.identity[0].oidc[0].issuer, "https://", "")}:sub": "system:serviceaccount:kube-system:coredns"
+            "${replace(aws_eks_cluster.this.identity[0].oidc[0].issuer, "https://", "")}:aud": "sts.amazonaws.com"
+          }
         }
       }
     ]
   })
-}
-
-# Attach required policies for EKS Node Group
-resource "aws_iam_role_policy_attachment" "eks_worker_node_policy" {
-  policy_arn = "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy"
-  role       = aws_iam_role.eks_node_group_role.name
-}
-
-resource "aws_iam_role_policy_attachment" "eks_cni_policy" {
-  policy_arn = "arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy"
-  role       = aws_iam_role.eks_node_group_role.name
-}
-
-resource "aws_iam_role_policy_attachment" "eks_container_registry_policy" {
-  policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
-  role       = aws_iam_role.eks_node_group_role.name
-}
-
-# 노드 그룹 (t3.large 2개)
-resource "aws_eks_node_group" "this" {
-  cluster_name    = aws_eks_cluster.this.name
-  node_group_name = "zoochacha-node-group-large"
-  node_role_arn   = aws_iam_role.eks_node_group_role.arn
-  subnet_ids      = [
-    data.terraform_remote_state.vpc.outputs.pri-sub1-id,
-    data.terraform_remote_state.vpc.outputs.pri-sub2-id
-  ]
-
-  scaling_config {
-    desired_size = 2
-    max_size     = 3
-    min_size     = 1
-  }
-
-  instance_types = ["t3.large"]
 
   tags = {
-    Name = "zoochacha-node-group-large"
+    Name = "zoochacha-eks-coredns-role"
   }
-
-  depends_on = [
-    aws_iam_role_policy_attachment.eks_worker_node_policy,
-    aws_iam_role_policy_attachment.eks_cni_policy,
-    aws_iam_role_policy_attachment.eks_container_registry_policy,
-  ]
 }
 
-# EKS Add-ons
+# Kube-proxy IAM Role
+resource "aws_iam_role" "kube_proxy" {
+  name = "zoochacha-eks-kube-proxy-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Principal = {
+          Federated = aws_iam_openid_connect_provider.eks.arn
+        }
+        Action = "sts:AssumeRoleWithWebIdentity"
+        Condition = {
+          StringEquals = {
+            "${replace(aws_eks_cluster.this.identity[0].oidc[0].issuer, "https://", "")}:sub": "system:serviceaccount:kube-system:kube-proxy"
+            "${replace(aws_eks_cluster.this.identity[0].oidc[0].issuer, "https://", "")}:aud": "sts.amazonaws.com"
+          }
+        }
+      }
+    ]
+  })
+
+  tags = {
+    Name = "zoochacha-eks-kube-proxy-role"
+  }
+}
+
+# VPC CNI 애드온
 resource "aws_eks_addon" "vpc_cni" {
   cluster_name = aws_eks_cluster.this.name
   addon_name   = "vpc-cni"
   addon_version = "v1.19.0-eksbuild.1"
+  service_account_role_arn = aws_iam_role.vpc_cni.arn
+
+  depends_on = [
+    aws_eks_node_group.this
+  ]
 
   tags = {
     Name = "zoochacha-eks-vpc-cni"
   }
 }
 
+# CoreDNS 애드온
 resource "aws_eks_addon" "coredns" {
   cluster_name = aws_eks_cluster.this.name
   addon_name   = "coredns"
-  addon_version = "v1.11.4-eksbuild.1"
+  addon_version = "v1.11.3-eksbuild.1"
+  service_account_role_arn = aws_iam_role.coredns.arn
+
+  depends_on = [
+    aws_eks_node_group.this
+  ]
 
   tags = {
     Name = "zoochacha-eks-coredns"
   }
 }
 
+# Kube-proxy 애드온
 resource "aws_eks_addon" "kube_proxy" {
   cluster_name = aws_eks_cluster.this.name
   addon_name   = "kube-proxy"
   addon_version = "v1.31.2-eksbuild.3"
+  service_account_role_arn = aws_iam_role.kube_proxy.arn
+
+  depends_on = [
+    aws_eks_node_group.this
+  ]
 
   tags = {
     Name = "zoochacha-eks-kube-proxy"
   }
-}
-
-# Jenkins 모듈
-module "jenkins" {
-  source = "../jenkins"
-
-  github_organization = "zoochacha"
-  shared_library_repo = "https://github.com/zoochacha/jenkins-shared-library.git"
-  github_repositories = ["zoochacha_terraform"]
 }
