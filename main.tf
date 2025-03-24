@@ -45,6 +45,40 @@ provider "helm" {
   }
 }
 
+# AWS 계정 정보
+data "aws_caller_identity" "current" {}
+
+# EFK 비밀 정보
+data "aws_secretsmanager_secret" "efk_password" {
+  name = "efk-password"
+}
+
+data "aws_secretsmanager_secret_version" "efk_password" {
+  secret_id = data.aws_secretsmanager_secret.efk_password.id
+}
+
+# Jenkins SSH 키 생성
+resource "tls_private_key" "jenkins_test" {
+  algorithm = "RSA"
+  rsa_bits  = 4096
+}
+
+resource "local_file" "jenkins_test_private_key" {
+  content         = tls_private_key.jenkins_test.private_key_pem
+  filename        = "${path.module}/jenkins_test.pem"
+  file_permission = "0600"
+}
+
+# Jenkins EIP
+resource "aws_eip" "jenkins_test" {
+  domain = "vpc"
+}
+
+resource "aws_eip_association" "jenkins_test" {
+  instance_id   = module.jenkins-ec2.instance_id
+  allocation_id = aws_eip.jenkins_test.id
+}
+
 # VPC 모듈
 module "vpc" {
   source = "./vpc"
@@ -58,21 +92,47 @@ module "eks" {
   public_subnet_ids  = module.vpc.public_subnet_ids
 }
 
-data "aws_secretsmanager_secret" "jenkins_password" {
-  name = "jenkins-admin-password"
-}
-
-data "aws_secretsmanager_secret_version" "jenkins_password" {
-  secret_id = data.aws_secretsmanager_secret.jenkins_password.id
-}
-
-# Jenkins 모듈
+# Jenkins EC2 모듈
 module "jenkins-ec2" {
   source                  = "./jenkins-ec2"
   vpc_id                 = module.vpc.vpc_id
   subnet_id              = module.vpc.public_subnet_ids[0]
   cluster_name           = module.eks.cluster_name
   jenkins_admin_password = data.aws_secretsmanager_secret_version.jenkins_password.secret_string
+
+  depends_on = [
+    module.vpc,
+    module.eks
+  ]
+}
+
+# Basic Infra 모듈
+module "basic_infra" {
+  source = "./zoochacha-basic-infra"
+  depends_on = [
+    module.eks
+  ]
+}
+
+# Log Monitoring 모듈
+module "log_monitoring" {
+  source = "./log-monitoring"
+  vpc_id             = module.vpc.vpc_id
+  subnet_id          = module.vpc.private_subnet_ids[0]  # 첫 번째 프라이빗 서브넷 사용
+  secret_manager_arn = "arn:aws:secretsmanager:ap-northeast-2:${data.aws_caller_identity.current.account_id}:secret:efk-password-*"
+  elastic_password   = data.aws_secretsmanager_secret_version.efk_password.secret_string
+  
+  depends_on = [
+    module.basic_infra
+  ]
+}
+
+data "aws_secretsmanager_secret" "jenkins_password" {
+  name = "jenkins-admin-password"
+}
+
+data "aws_secretsmanager_secret_version" "jenkins_password" {
+  secret_id = data.aws_secretsmanager_secret.jenkins_password.id
 }
 
 # EIP 연결을 위한 null_resource

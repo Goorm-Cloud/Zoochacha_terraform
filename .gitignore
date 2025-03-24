@@ -48,5 +48,6 @@ terraform.rc
 *.csr.pem.txt
 *.csr.pem.txt.txt
 
-# End of https://www.toptal.com/developers/gitignore/api/terraformjenkins-ec2/jenkins_config.tar.gz
-jenkins-ec2/jenkins_config.tar.gz
+# End of https://www.toptal.com/developers/gitignore/api/terraform
+
+*.tar.gz

@@ -41,4 +41,16 @@ variable "jenkins_admin_password" {
   description = "Jenkins admin user password"
   type        = string
   sensitive   = true
+}
+
+variable "use_recovery_ami" {
+  description = "배포 실패 시 복구 AMI를 사용할지 여부"
+  type        = bool
+  default     = false
+}
+
+variable "recovery_ami_id" {
+  description = "복구에 사용할 AMI ID (지정된 경우 use_recovery_ami 값과 상관없이 이 AMI 사용)"
+  type        = string
+  default     = ""
 } 
