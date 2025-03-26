@@ -5,5 +5,6 @@ terraform {
     region         = "ap-northeast-2"
     encrypt        = true
     profile        = "zoochacha"
+    dynamodb_table = "terraform-lock"
   }
 } 
