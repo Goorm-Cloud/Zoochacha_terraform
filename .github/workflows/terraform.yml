@@ -16,34 +16,77 @@ env:
   TF_VERSION: '1.5.7'
 
 jobs:
+  check-previous-run:
+    runs-on: ubuntu-latest
+    outputs:
+      last-successful-job: ${{ steps.get-state.outputs.last-successful-job }}
+      run-number: ${{ steps.get-run-number.outputs.run-number }}
+    steps:
+      - name: Get Last Successful Job
+        id: get-state
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          LAST_JOB=$(gh run list --json jobs,conclusion,name -L 1 | jq -r '.[0].jobs[] | select(.conclusion=="success") | .name' | head -1)
+          echo "last-successful-job=$LAST_JOB" >> $GITHUB_OUTPUT
+          echo "Last successful job: $LAST_JOB"
+      
+      - name: Get Run Number
+        id: get-run-number
+        run: |
+          RUN_NUMBER=$(gh run list --json databaseId -L 1 | jq -r '.[0].databaseId')
+          echo "run-number=$RUN_NUMBER" >> $GITHUB_OUTPUT
+
+  notify-failure:
+    needs: [check-previous-run, dynamodb, vpc, eks, jenkins, basic-infra, log-monitoring]
+    if: failure()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send Discord Notification
+        run: |
+          curl -X POST ${{ secrets.DISCORD_WEBHOOK_URL }} \
+          -H "Content-Type: application/json" \
+          -d "{\"content\": \"🚨 **Terraform 배포 실패**\n실행 번호: #${{ needs.check-previous-run.outputs.run-number }}\n실패한 작업: ${{ github.job }}\n상세 내용: ${{ github.event.head_commit.message }}\n\n[실행 상세 보기](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${{ github.run_id }})\"}"
+        env:
+          GITHUB_SERVER_URL: ${{ github.server_url }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+
   dynamodb:
+    needs: check-previous-run
+    if: needs.check-previous-run.outputs.last-successful-job == null
     name: 'DynamoDB'
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: ./dynamodb
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v4
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
+      - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ env.TF_VERSION }}
       - name: Terraform Init
         run: terraform init
+      - name: Terraform Plan
+        run: terraform plan
       - name: Terraform Apply
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-        run: terraform apply -auto-approve
+        run: |
+          terraform apply -auto-approve
+          git config --global user.email "github-actions@github.com"
+          git config --global user.name "GitHub Actions"
+          git add .
+          git commit -m "terraform ci test#${{ needs.check-previous-run.outputs.run-number }}"
+          git push
 
   vpc:
+    needs: [check-previous-run, dynamodb]
+    if: needs.check-previous-run.outputs.last-successful-job == null || needs.check-previous-run.outputs.last-successful-job == 'DynamoDB'
     name: 'VPC'
-    needs: [dynamodb]
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -64,11 +107,18 @@ jobs:
         run: terraform plan
       - name: Terraform Apply
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-        run: terraform apply -auto-approve
+        run: |
+          terraform apply -auto-approve
+          git config --global user.email "github-actions@github.com"
+          git config --global user.name "GitHub Actions"
+          git add .
+          git commit -m "terraform ci test#${{ needs.check-previous-run.outputs.run-number }}"
+          git push
 
   eks:
+    needs: [check-previous-run, vpc]
+    if: needs.check-previous-run.outputs.last-successful-job == null || needs.check-previous-run.outputs.last-successful-job == 'VPC'
     name: 'EKS'
-    needs: [vpc]
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -89,11 +139,18 @@ jobs:
         run: terraform plan
       - name: Terraform Apply
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-        run: terraform apply -auto-approve
+        run: |
+          terraform apply -auto-approve
+          git config --global user.email "github-actions@github.com"
+          git config --global user.name "GitHub Actions"
+          git add .
+          git commit -m "terraform ci test#${{ needs.check-previous-run.outputs.run-number }}"
+          git push
 
   jenkins:
+    needs: [check-previous-run, vpc]
+    if: needs.check-previous-run.outputs.last-successful-job == null || needs.check-previous-run.outputs.last-successful-job == 'VPC'
     name: 'Jenkins EC2'
-    needs: [vpc]
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -114,11 +171,18 @@ jobs:
         run: terraform plan
       - name: Terraform Apply
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-        run: terraform apply -auto-approve
+        run: |
+          terraform apply -auto-approve
+          git config --global user.email "github-actions@github.com"
+          git config --global user.name "GitHub Actions"
+          git add .
+          git commit -m "terraform ci test#${{ needs.check-previous-run.outputs.run-number }}"
+          git push
 
   basic-infra:
+    needs: [check-previous-run, eks]
+    if: needs.check-previous-run.outputs.last-successful-job == null || needs.check-previous-run.outputs.last-successful-job == 'EKS'
     name: 'Basic Infrastructure'
-    needs: [eks]
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -139,11 +203,18 @@ jobs:
         run: terraform plan
       - name: Terraform Apply
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-        run: terraform apply -auto-approve
+        run: |
+          terraform apply -auto-approve
+          git config --global user.email "github-actions@github.com"
+          git config --global user.name "GitHub Actions"
+          git add .
+          git commit -m "terraform ci test#${{ needs.check-previous-run.outputs.run-number }}"
+          git push
 
   log-monitoring:
+    needs: [check-previous-run, eks]
+    if: needs.check-previous-run.outputs.last-successful-job == null || needs.check-previous-run.outputs.last-successful-job == 'EKS'
     name: 'Log Monitoring'
-    needs: [eks]
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -164,4 +235,10 @@ jobs:
         run: terraform plan
       - name: Terraform Apply
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-        run: terraform apply -auto-approve 
+        run: |
+          terraform apply -auto-approve
+          git config --global user.email "github-actions@github.com"
+          git config --global user.name "GitHub Actions"
+          git add .
+          git commit -m "terraform ci test#${{ needs.check-previous-run.outputs.run-number }}"
+          git push 
