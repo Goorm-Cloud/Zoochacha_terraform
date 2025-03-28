@@ -5,6 +5,20 @@ on:
     branches: [ main ]
   push:
     branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      start_from:
+        description: '시작할 작업 선택'
+        required: true
+        default: 'dynamodb'
+        type: choice
+        options:
+        - dynamodb
+        - vpc
+        - eks
+        - jenkins
+        - basic-infra
+        - log-monitoring
 
 permissions:
   contents: write
@@ -23,34 +37,16 @@ jobs:
       run-number: ${{ steps.get-run-number.outputs.run-number }}
       previous-run-status: ${{ steps.get-previous-status.outputs.previous-run-status }}
     steps:
-      - name: Get Previous Run Status
-        id: get-previous-status
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Set Starting Job
+        id: set-job
         run: |
-          PREVIOUS_RUN=$(gh run list --json databaseId,conclusion,status -L 2 | jq -r '.[1]')
-          PREVIOUS_STATUS=$(echo $PREVIOUS_RUN | jq -r '.status')
-          echo "previous-run-status=$PREVIOUS_STATUS" >> $GITHUB_OUTPUT
-          echo "Previous run status: $PREVIOUS_STATUS"
-      
-      - name: Get Last Successful Job
-        id: get-state
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          if [ "${{ steps.get-previous-status.outputs.previous-run-status }}" = "success" ]; then
-            LAST_JOB=$(gh run list --json jobs,conclusion,name -L 2 | jq -r '.[1].jobs[] | select(.conclusion=="success") | .name' | head -1)
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "last-successful-job=$(echo ${{ github.event.inputs.start_from }} | sed 's/^/previous-/')" >> $GITHUB_OUTPUT
           else
-            LAST_JOB=$(gh run list --json jobs,conclusion,name -L 1 | jq -r '.[0].jobs[] | select(.conclusion=="success") | .name' | head -1)
+            PREVIOUS_RUN=$(gh run list --json jobs,conclusion,name -L 2 | jq -r '.[1].jobs[] | select(.conclusion=="success") | .name' | head -1)
+            echo "last-successful-job=$PREVIOUS_RUN" >> $GITHUB_OUTPUT
           fi
-          echo "last-successful-job=$LAST_JOB" >> $GITHUB_OUTPUT
-          echo "Last successful job: $LAST_JOB"
-      
-      - name: Get Run Number
-        id: get-run-number
-        run: |
-          RUN_NUMBER=$(gh run list --json databaseId -L 1 | jq -r '.[0].databaseId')
-          echo "run-number=$RUN_NUMBER" >> $GITHUB_OUTPUT
+          echo "Last successful job: $PREVIOUS_RUN"
 
   notify-failure:
     needs: [check-previous-run, dynamodb, vpc, eks, jenkins, basic-infra, log-monitoring]
@@ -68,7 +64,7 @@ jobs:
 
   dynamodb:
     needs: check-previous-run
-    if: needs.check-previous-run.outputs.last-successful-job == null
+    if: needs.check-previous-run.outputs.last-successful-job == null || github.event.inputs.start_from == 'dynamodb'
     name: 'DynamoDB'
     runs-on: ubuntu-latest
     defaults:
@@ -88,14 +84,14 @@ jobs:
       - name: Terraform Init
         run: terraform init
       - name: Terraform Plan
-        run: terraform plan -lock=false -parallelism=20
+        run: terraform plan -parallelism=20
       - name: Terraform Apply
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-        run: terraform apply -auto-approve -lock=false
+        run: terraform apply -auto-approve
 
   vpc:
     needs: [check-previous-run, dynamodb]
-    if: needs.check-previous-run.outputs.last-successful-job == null || needs.check-previous-run.outputs.last-successful-job == 'DynamoDB'
+    if: needs.check-previous-run.outputs.last-successful-job == null || needs.check-previous-run.outputs.last-successful-job == 'DynamoDB' || github.event.inputs.start_from == 'vpc'
     name: 'VPC'
     runs-on: ubuntu-latest
     defaults:
@@ -115,14 +111,14 @@ jobs:
       - name: Terraform Init
         run: terraform init
       - name: Terraform Plan
-        run: terraform plan -lock=false -parallelism=20
+        run: terraform plan -parallelism=20
       - name: Terraform Apply
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-        run: terraform apply -auto-approve -lock=false
+        run: terraform apply -auto-approve
 
   eks:
     needs: [check-previous-run, vpc]
-    if: needs.check-previous-run.outputs.last-successful-job == null || needs.check-previous-run.outputs.last-successful-job == 'VPC'
+    if: needs.check-previous-run.outputs.last-successful-job == null || needs.check-previous-run.outputs.last-successful-job == 'VPC' || github.event.inputs.start_from == 'eks'
     name: 'EKS'
     runs-on: ubuntu-latest
     defaults:
@@ -150,21 +146,21 @@ jobs:
           cd ../eks
       - name: Terraform Plan
         run: |
-          terraform plan -lock=false -parallelism=20 \
+          terraform plan -parallelism=20 \
           -var="vpc_id=${{ env.VPC_ID }}" \
           -var="private_subnet_ids=${{ env.PRIVATE_SUBNET_IDS }}" \
           -var="public_subnet_ids=${{ env.PUBLIC_SUBNET_IDS }}"
       - name: Terraform Apply
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         run: |
-          terraform apply -auto-approve -lock=false \
+          terraform apply -auto-approve \
           -var="vpc_id=${{ env.VPC_ID }}" \
           -var="private_subnet_ids=${{ env.PRIVATE_SUBNET_IDS }}" \
           -var="public_subnet_ids=${{ env.PUBLIC_SUBNET_IDS }}"
 
   jenkins:
-    needs: [check-previous-run, vpc]
-    if: needs.check-previous-run.outputs.last-successful-job == null || needs.check-previous-run.outputs.last-successful-job == 'VPC'
+    needs: [check-previous-run, eks]
+    if: needs.check-previous-run.outputs.last-successful-job == null || needs.check-previous-run.outputs.last-successful-job == 'EKS' || github.event.inputs.start_from == 'jenkins'
     name: 'Jenkins EC2'
     runs-on: ubuntu-latest
     defaults:
@@ -191,19 +187,19 @@ jobs:
           cd ../jenkins-ec2
       - name: Terraform Plan
         run: |
-          terraform plan -lock=false -parallelism=20 \
+          terraform plan -parallelism=20 \
           -var="vpc_id=${{ env.VPC_ID }}" \
           -var="subnet_id=${{ env.PUBLIC_SUBNET_ID }}"
       - name: Terraform Apply
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         run: |
-          terraform apply -auto-approve -lock=false \
+          terraform apply -auto-approve \
           -var="vpc_id=${{ env.VPC_ID }}" \
           -var="subnet_id=${{ env.PUBLIC_SUBNET_ID }}"
 
   basic-infra:
     needs: [check-previous-run, eks]
-    if: needs.check-previous-run.outputs.last-successful-job == null || needs.check-previous-run.outputs.last-successful-job == 'EKS'
+    if: needs.check-previous-run.outputs.last-successful-job == null || needs.check-previous-run.outputs.last-successful-job == 'EKS' || github.event.inputs.start_from == 'basic-infra'
     name: 'Basic Infrastructure'
     runs-on: ubuntu-latest
     defaults:
@@ -223,14 +219,14 @@ jobs:
       - name: Terraform Init
         run: terraform init
       - name: Terraform Plan
-        run: terraform plan -lock=false -parallelism=20
+        run: terraform plan -parallelism=20
       - name: Terraform Apply
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-        run: terraform apply -auto-approve -lock=false
+        run: terraform apply -auto-approve
 
   log-monitoring:
     needs: [check-previous-run, eks]
-    if: needs.check-previous-run.outputs.last-successful-job == null || needs.check-previous-run.outputs.last-successful-job == 'EKS'
+    if: needs.check-previous-run.outputs.last-successful-job == null || needs.check-previous-run.outputs.last-successful-job == 'EKS' || github.event.inputs.start_from == 'log-monitoring'
     name: 'Log Monitoring'
     runs-on: ubuntu-latest
     defaults:
@@ -250,10 +246,10 @@ jobs:
       - name: Terraform Init
         run: terraform init
       - name: Terraform Plan
-        run: terraform plan -lock=false -parallelism=20
+        run: terraform plan -parallelism=20
       - name: Terraform Apply
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-        run: terraform apply -auto-approve -lock=false
+        run: terraform apply -auto-approve
 
   commit-changes:
     needs: [check-previous-run, dynamodb, vpc, eks, jenkins, basic-infra, log-monitoring]
