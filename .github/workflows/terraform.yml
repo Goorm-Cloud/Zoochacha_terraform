@@ -87,10 +87,10 @@ jobs:
       - name: Terraform Init
         run: terraform init
       - name: Terraform Plan
-        run: terraform plan
+        run: terraform plan -lock=false
       - name: Terraform Apply
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-        run: terraform apply -auto-approve
+        run: terraform apply -auto-approve -lock=false
 
   vpc:
     needs: [check-previous-run, dynamodb]
@@ -113,10 +113,10 @@ jobs:
       - name: Terraform Init
         run: terraform init
       - name: Terraform Plan
-        run: terraform plan
+        run: terraform plan -lock=false
       - name: Terraform Apply
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-        run: terraform apply -auto-approve
+        run: terraform apply -auto-approve -lock=false
 
   eks:
     needs: [check-previous-run, vpc]
@@ -139,10 +139,10 @@ jobs:
       - name: Terraform Init
         run: terraform init
       - name: Terraform Plan
-        run: terraform plan
+        run: terraform plan -lock=false
       - name: Terraform Apply
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-        run: terraform apply -auto-approve
+        run: terraform apply -auto-approve -lock=false
 
   jenkins:
     needs: [check-previous-run, vpc]
@@ -165,10 +165,10 @@ jobs:
       - name: Terraform Init
         run: terraform init
       - name: Terraform Plan
-        run: terraform plan
+        run: terraform plan -lock=false
       - name: Terraform Apply
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-        run: terraform apply -auto-approve
+        run: terraform apply -auto-approve -lock=false
 
   basic-infra:
     needs: [check-previous-run, eks]
@@ -191,10 +191,10 @@ jobs:
       - name: Terraform Init
         run: terraform init
       - name: Terraform Plan
-        run: terraform plan
+        run: terraform plan -lock=false
       - name: Terraform Apply
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-        run: terraform apply -auto-approve
+        run: terraform apply -auto-approve -lock=false
 
   log-monitoring:
     needs: [check-previous-run, eks]
@@ -217,10 +217,10 @@ jobs:
       - name: Terraform Init
         run: terraform init
       - name: Terraform Plan
-        run: terraform plan
+        run: terraform plan -lock=false
       - name: Terraform Apply
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-        run: terraform apply -auto-approve
+        run: terraform apply -auto-approve -lock=false
 
   commit-changes:
     needs: [check-previous-run, dynamodb, vpc, eks, jenkins, basic-infra, log-monitoring]
@@ -236,4 +236,4 @@ jobs:
         run: |
           git add .
           git commit -m "terraform ci test#${{ needs.check-previous-run.outputs.run-number }}"
-          git push 
+          git push
