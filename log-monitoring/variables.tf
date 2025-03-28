@@ -71,4 +71,16 @@ variable "instance_profile_name" {
   description = "IAM instance profile name"
   type        = string
   default     = "zoochacha-efk-profile"
+}
+
+variable "instance_type" {
+  description = "EC2 instance type for EFK stack"
+  type        = string
+  default     = "t3.medium"
+}
+
+variable "volume_size" {
+  description = "Size of the EBS volume in GB"
+  type        = number
+  default     = 100
 } 

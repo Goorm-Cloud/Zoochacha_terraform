@@ -51,8 +51,13 @@ data "aws_ami" "ubuntu" {
   most_recent = true
 
   filter {
-    name   = "image-id"
-    values = ["ami-0035b9cafde7aeb38"]
+    name   = "name"
+    values = ["monitoring-*"]
+  }
+
+  filter {
+    name   = "virtualization-type"
+    values = ["hvm"]
   }
 
   owners = ["self"]
@@ -395,7 +400,7 @@ resource "kubernetes_cluster_role_binding" "fluentd" {
 }
 
 # FluentD DaemonSet
-resource "kubernetes_daemon_set" "fluentd" {
+resource "kubernetes_daemonset" "fluentd" {
   metadata {
     name      = "fluentd"
     namespace = kubernetes_namespace.logging.metadata[0].name
@@ -420,7 +425,7 @@ resource "kubernetes_daemon_set" "fluentd" {
 
       spec {
         service_account_name = kubernetes_service_account.fluentd.metadata[0].name
-        containers {
+        container {
           name  = "fluentd"
           image = "fluent/fluentd-kubernetes-daemonset:v1.16-debian-elasticsearch7-1"
           env {
@@ -431,35 +436,35 @@ resource "kubernetes_daemon_set" "fluentd" {
             name  = "ELASTIC_PASSWORD"
             value = var.elastic_password
           }
-          volume_mounts {
+          volume_mount {
             name       = "varlog"
             mount_path = "/var/log"
           }
-          volume_mounts {
+          volume_mount {
             name       = "varlibdockercontainers"
             mount_path = "/var/lib/docker/containers"
             read_only  = true
           }
-          volume_mounts {
+          volume_mount {
             name       = "config"
             mount_path = "/fluentd/etc"
           }
         }
-        volumes {
+        volume {
           name = "varlog"
           host_path {
             path = "/var/log"
             type = "DirectoryOrCreate"
           }
         }
-        volumes {
+        volume {
           name = "varlibdockercontainers"
           host_path {
             path = "/var/lib/docker/containers"
             type = "DirectoryOrCreate"
           }
         }
-        volumes {
+        volume {
           name = "config"
           config_map {
             name = kubernetes_config_map.fluentd.metadata[0].name

@@ -5,7 +5,7 @@ output "instance_id" {
 
 output "instance_public_ip" {
   description = "EC2 인스턴스의 공개 IP"
-  value       = aws_eip.efk.public_ip
+  value       = aws_instance.efk.public_ip
 }
 
 output "elasticsearch_security_group_id" {

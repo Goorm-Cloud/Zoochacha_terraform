@@ -4,18 +4,6 @@ variable "aws_region" {
   default     = "ap-northeast-2"
 }
 
-variable "cluster_name" {
-  description = "EKS 클러스터 이름"
-  type        = string
-  default     = "zoochacha-eks-cluster"
-}
-
-variable "cluster_version" {
-  description = "EKS 클러스터 버전"
-  type        = string
-  default     = "1.31"
-}
-
 variable "vpc_id" {
   description = "VPC ID"
   type        = string

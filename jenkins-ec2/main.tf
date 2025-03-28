@@ -13,10 +13,11 @@ provider "aws" {
 
 # VPC 정보 가져오기 (기존 VPC 사용)
 data "terraform_remote_state" "vpc" {
-  backend = "local"
-
+  backend = "s3"
   config = {
-    path = "${path.module}/../vpc/terraform.tfstate"
+    bucket = "zoochacha-permanent-store"
+    key    = "terraform/state/vpc/terraform.tfstate"
+    region = "ap-northeast-2"
   }
 }
 
@@ -157,7 +158,7 @@ resource "aws_iam_instance_profile" "jenkins_profile" {
 
 # EC2 인스턴스 생성
 resource "aws_instance" "jenkins" {
-  ami                  = var.ami_id
+  ami                  = var.use_recovery_ami ? var.recovery_ami_id : var.ami_id
   instance_type        = var.instance_type
   subnet_id            = data.terraform_remote_state.vpc.outputs.pub_sub1_id
   key_name             = var.key_name
