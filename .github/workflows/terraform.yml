@@ -85,6 +85,14 @@ jobs:
       - name: Terraform Apply
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         run: terraform apply -auto-approve
+      - name: Release State Lock
+        if: always()
+        run: |
+          LOCK_ID="zoochacha-permanent-store/terraform/state/dynamodb/terraform.tfstate"
+          aws dynamodb delete-item \
+            --table-name terraform-lock \
+            --key "{\"LockID\":{\"S\":\"$LOCK_ID\"}}" \
+            --region ap-northeast-2
 
   vpc:
     needs: [check-previous-run, dynamodb]
@@ -103,10 +111,18 @@ jobs:
       - name: Terraform Init
         run: terraform init
       - name: Terraform Plan
-        run: terraform plan -parallelism=20 -lock=false
+        run: terraform plan -parallelism=20
       - name: Terraform Apply
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-        run: terraform apply -auto-approve -lock=false
+        run: terraform apply -auto-approve
+      - name: Release State Lock
+        if: always()
+        run: |
+          LOCK_ID="zoochacha-permanent-store/terraform/state/vpc/terraform.tfstate"
+          aws dynamodb delete-item \
+            --table-name terraform-lock \
+            --key "{\"LockID\":{\"S\":\"$LOCK_ID\"}}" \
+            --region ap-northeast-2
 
   eks:
     needs: [check-previous-run, vpc]
@@ -128,7 +144,6 @@ jobs:
         run: |
           terraform plan \
             -parallelism=20 \
-            -lock=false \
             -var="vpc_id=$(terraform output -state=../vpc/terraform.tfstate -raw vpc_id)" \
             -var="private_subnet_ids=$(terraform output -state=../vpc/terraform.tfstate -json private_subnet_ids)" \
             -var="public_subnet_ids=$(terraform output -state=../vpc/terraform.tfstate -json public_subnet_ids)"
@@ -136,10 +151,17 @@ jobs:
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         run: |
           terraform apply -auto-approve \
-            -lock=false \
             -var="vpc_id=$(terraform output -state=../vpc/terraform.tfstate -raw vpc_id)" \
             -var="private_subnet_ids=$(terraform output -state=../vpc/terraform.tfstate -json private_subnet_ids)" \
             -var="public_subnet_ids=$(terraform output -state=../vpc/terraform.tfstate -json public_subnet_ids)"
+      - name: Release State Lock
+        if: always()
+        run: |
+          LOCK_ID="zoochacha-permanent-store/terraform/state/eks/terraform.tfstate"
+          aws dynamodb delete-item \
+            --table-name terraform-lock \
+            --key "{\"LockID\":{\"S\":\"$LOCK_ID\"}}" \
+            --region ap-northeast-2
 
   jenkins:
     needs: [check-previous-run, eks]
@@ -162,6 +184,14 @@ jobs:
       - name: Terraform Apply
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         run: terraform apply -auto-approve
+      - name: Release State Lock
+        if: always()
+        run: |
+          LOCK_ID="zoochacha-permanent-store/terraform/state/jenkins-ec2/terraform.tfstate"
+          aws dynamodb delete-item \
+            --table-name terraform-lock \
+            --key "{\"LockID\":{\"S\":\"$LOCK_ID\"}}" \
+            --region ap-northeast-2
 
   basic-infra:
     needs: [check-previous-run, eks]
@@ -184,6 +214,14 @@ jobs:
       - name: Terraform Apply
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         run: terraform apply -auto-approve
+      - name: Release State Lock
+        if: always()
+        run: |
+          LOCK_ID="zoochacha-permanent-store/terraform/state/basic-infra/terraform.tfstate"
+          aws dynamodb delete-item \
+            --table-name terraform-lock \
+            --key "{\"LockID\":{\"S\":\"$LOCK_ID\"}}" \
+            --region ap-northeast-2
 
   log-monitoring:
     needs: [check-previous-run, eks]
@@ -206,6 +244,14 @@ jobs:
       - name: Terraform Apply
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         run: terraform apply -auto-approve
+      - name: Release State Lock
+        if: always()
+        run: |
+          LOCK_ID="zoochacha-permanent-store/terraform/state/log-monitoring/terraform.tfstate"
+          aws dynamodb delete-item \
+            --table-name terraform-lock \
+            --key "{\"LockID\":{\"S\":\"$LOCK_ID\"}}" \
+            --region ap-northeast-2
 
   commit-changes:
     needs: [check-previous-run, dynamodb, vpc, eks, jenkins, basic-infra, log-monitoring]

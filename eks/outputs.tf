@@ -1,14 +1,14 @@
 output "cluster_name" {
-  description = "EKS 클러스터 이름"
+  description = "The name of the EKS cluster"
   value       = aws_eks_cluster.this.name
 }
 
 output "cluster_endpoint" {
-  description = "EKS 클러스터 엔드포인트"
+  description = "The endpoint for the EKS cluster"
   value       = aws_eks_cluster.this.endpoint
 }
 
 output "cluster_certificate_authority_data" {
-  description = "EKS 클러스터 인증서 데이터"
+  description = "The base64 encoded certificate data required to communicate with the cluster"
   value       = aws_eks_cluster.this.certificate_authority[0].data
 }
