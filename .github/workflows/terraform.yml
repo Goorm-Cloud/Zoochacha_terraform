@@ -84,10 +84,11 @@ jobs:
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
       - name: Terraform Init
         run: terraform init
       - name: Terraform Plan
-        run: terraform plan -lock=false
+        run: terraform plan -lock=false -parallelism=20
       - name: Terraform Apply
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         run: terraform apply -auto-approve -lock=false
@@ -110,10 +111,11 @@ jobs:
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
       - name: Terraform Init
         run: terraform init
       - name: Terraform Plan
-        run: terraform plan -lock=false
+        run: terraform plan -lock=false -parallelism=20
       - name: Terraform Apply
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         run: terraform apply -auto-approve -lock=false
@@ -136,10 +138,11 @@ jobs:
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
       - name: Terraform Init
         run: terraform init
       - name: Terraform Plan
-        run: terraform plan -lock=false
+        run: terraform plan -lock=false -parallelism=20
       - name: Terraform Apply
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         run: terraform apply -auto-approve -lock=false
@@ -162,10 +165,11 @@ jobs:
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
       - name: Terraform Init
         run: terraform init
       - name: Terraform Plan
-        run: terraform plan -lock=false
+        run: terraform plan -lock=false -parallelism=20
       - name: Terraform Apply
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         run: terraform apply -auto-approve -lock=false
@@ -188,10 +192,11 @@ jobs:
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
       - name: Terraform Init
         run: terraform init
       - name: Terraform Plan
-        run: terraform plan -lock=false
+        run: terraform plan -lock=false -parallelism=20
       - name: Terraform Apply
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         run: terraform apply -auto-approve -lock=false
@@ -214,10 +219,11 @@ jobs:
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
       - name: Terraform Init
         run: terraform init
       - name: Terraform Plan
-        run: terraform plan -lock=false
+        run: terraform plan -lock=false -parallelism=20
       - name: Terraform Apply
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         run: terraform apply -auto-approve -lock=false
