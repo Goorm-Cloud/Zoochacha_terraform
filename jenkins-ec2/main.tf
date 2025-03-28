@@ -20,6 +20,10 @@ data "terraform_remote_state" "vpc" {
   }
 }
 
+# AWS 리전과 계정 ID 데이터 소스
+data "aws_region" "current" {}
+data "aws_caller_identity" "current" {}
+
 locals {
   prefix = data.terraform_remote_state.vpc.outputs.prefix
 }
