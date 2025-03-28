@@ -141,11 +141,26 @@ jobs:
           terraform_wrapper: false
       - name: Terraform Init
         run: terraform init
+      - name: Get VPC Outputs
+        run: |
+          cd ../vpc
+          echo "VPC_ID=$(terraform output -raw vpc_id)" >> $GITHUB_ENV
+          echo "PRIVATE_SUBNET_IDS=$(terraform output -json private_subnet_ids)" >> $GITHUB_ENV
+          echo "PUBLIC_SUBNET_IDS=$(terraform output -json public_subnet_ids)" >> $GITHUB_ENV
+          cd ../eks
       - name: Terraform Plan
-        run: terraform plan -lock=false -parallelism=20
+        run: |
+          terraform plan -lock=false -parallelism=20 \
+          -var="vpc_id=${{ env.VPC_ID }}" \
+          -var="private_subnet_ids=${{ env.PRIVATE_SUBNET_IDS }}" \
+          -var="public_subnet_ids=${{ env.PUBLIC_SUBNET_IDS }}"
       - name: Terraform Apply
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-        run: terraform apply -auto-approve -lock=false
+        run: |
+          terraform apply -auto-approve -lock=false \
+          -var="vpc_id=${{ env.VPC_ID }}" \
+          -var="private_subnet_ids=${{ env.PRIVATE_SUBNET_IDS }}" \
+          -var="public_subnet_ids=${{ env.PUBLIC_SUBNET_IDS }}"
 
   jenkins:
     needs: [check-previous-run, vpc]
@@ -168,11 +183,23 @@ jobs:
           terraform_wrapper: false
       - name: Terraform Init
         run: terraform init
+      - name: Get VPC Outputs
+        run: |
+          cd ../vpc
+          echo "VPC_ID=$(terraform output -raw vpc_id)" >> $GITHUB_ENV
+          echo "PUBLIC_SUBNET_ID=$(terraform output -raw pub_sub1_id)" >> $GITHUB_ENV
+          cd ../jenkins-ec2
       - name: Terraform Plan
-        run: terraform plan -lock=false -parallelism=20
+        run: |
+          terraform plan -lock=false -parallelism=20 \
+          -var="vpc_id=${{ env.VPC_ID }}" \
+          -var="subnet_id=${{ env.PUBLIC_SUBNET_ID }}"
       - name: Terraform Apply
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-        run: terraform apply -auto-approve -lock=false
+        run: |
+          terraform apply -auto-approve -lock=false \
+          -var="vpc_id=${{ env.VPC_ID }}" \
+          -var="subnet_id=${{ env.PUBLIC_SUBNET_ID }}"
 
   basic-infra:
     needs: [check-previous-run, eks]
