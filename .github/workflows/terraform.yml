@@ -7,7 +7,7 @@ on:
     branches: [ main ]
 
 permissions:
-  contents: read
+  contents: write
   pull-requests: write
   id-token: write
 
@@ -21,13 +21,28 @@ jobs:
     outputs:
       last-successful-job: ${{ steps.get-state.outputs.last-successful-job }}
       run-number: ${{ steps.get-run-number.outputs.run-number }}
+      previous-run-status: ${{ steps.get-previous-status.outputs.previous-run-status }}
     steps:
+      - name: Get Previous Run Status
+        id: get-previous-status
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PREVIOUS_RUN=$(gh run list --json databaseId,conclusion,status -L 2 | jq -r '.[1]')
+          PREVIOUS_STATUS=$(echo $PREVIOUS_RUN | jq -r '.status')
+          echo "previous-run-status=$PREVIOUS_STATUS" >> $GITHUB_OUTPUT
+          echo "Previous run status: $PREVIOUS_STATUS"
+      
       - name: Get Last Successful Job
         id: get-state
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          LAST_JOB=$(gh run list --json jobs,conclusion,name -L 1 | jq -r '.[0].jobs[] | select(.conclusion=="success") | .name' | head -1)
+          if [ "${{ steps.get-previous-status.outputs.previous-run-status }}" = "success" ]; then
+            LAST_JOB=$(gh run list --json jobs,conclusion,name -L 2 | jq -r '.[1].jobs[] | select(.conclusion=="success") | .name' | head -1)
+          else
+            LAST_JOB=$(gh run list --json jobs,conclusion,name -L 1 | jq -r '.[0].jobs[] | select(.conclusion=="success") | .name' | head -1)
+          fi
           echo "last-successful-job=$LAST_JOB" >> $GITHUB_OUTPUT
           echo "Last successful job: $LAST_JOB"
       
