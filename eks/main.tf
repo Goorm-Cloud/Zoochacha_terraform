@@ -19,7 +19,6 @@ data "terraform_remote_state" "vpc" {
     bucket  = "zoochacha-permanent-store"
     key     = "terraform/state/vpc/terraform.tfstate"
     region  = "ap-northeast-2"
-    profile = "zoochacha"
   }
 }
 
