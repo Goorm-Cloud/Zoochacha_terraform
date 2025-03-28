@@ -74,11 +74,6 @@ jobs:
         working-directory: ./dynamodb
     steps:
       - uses: actions/checkout@v4
-      - uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ env.TF_VERSION }}
@@ -101,11 +96,28 @@ jobs:
         working-directory: ./vpc
     steps:
       - uses: actions/checkout@v4
-      - uses: aws-actions/configure-aws-credentials@v4
+      - uses: hashicorp/setup-terraform@v3
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+      - name: Terraform Init
+        run: terraform init
+      - name: Terraform Plan
+        run: terraform plan -parallelism=20 -lock=false
+      - name: Terraform Apply
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        run: terraform apply -auto-approve -lock=false
+
+  eks:
+    needs: [check-previous-run, vpc]
+    if: needs.check-previous-run.outputs.last-successful-job == null || needs.check-previous-run.outputs.last-successful-job == 'VPC' || github.event.inputs.start_from == 'eks'
+    name: 'EKS'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./eks
+    steps:
+      - uses: actions/checkout@v4
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ env.TF_VERSION }}
@@ -129,37 +141,6 @@ jobs:
             -var="private_subnet_ids=$(terraform output -state=../vpc/terraform.tfstate -json private_subnet_ids)" \
             -var="public_subnet_ids=$(terraform output -state=../vpc/terraform.tfstate -json public_subnet_ids)"
 
-  eks:
-    needs: [check-previous-run, vpc]
-    if: needs.check-previous-run.outputs.last-successful-job == null || needs.check-previous-run.outputs.last-successful-job == 'VPC' || github.event.inputs.start_from == 'eks'
-    name: 'EKS'
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ./eks
-    steps:
-      - uses: actions/checkout@v4
-      - uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
-      - uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: ${{ env.TF_VERSION }}
-          terraform_wrapper: false
-      - name: Terraform Init
-        run: terraform init
-      - name: Terraform Plan
-        run: terraform plan -parallelism=20
-      - name: Terraform Apply
-        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-        run: terraform apply -auto-approve
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_REGION: ${{ env.AWS_REGION }}
-
   jenkins:
     needs: [check-previous-run, eks]
     if: needs.check-previous-run.outputs.last-successful-job == null || needs.check-previous-run.outputs.last-successful-job == 'EKS' || github.event.inputs.start_from == 'jenkins'
@@ -170,11 +151,6 @@ jobs:
         working-directory: ./jenkins-ec2
     steps:
       - uses: actions/checkout@v4
-      - uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ env.TF_VERSION }}
@@ -197,11 +173,6 @@ jobs:
         working-directory: ./zoochacha-basic-infra
     steps:
       - uses: actions/checkout@v4
-      - uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ env.TF_VERSION }}
@@ -224,11 +195,6 @@ jobs:
         working-directory: ./log-monitoring
     steps:
       - uses: actions/checkout@v4
-      - uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ env.TF_VERSION }}
