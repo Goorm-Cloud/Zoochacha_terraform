@@ -90,13 +90,7 @@ jobs:
         run: terraform plan
       - name: Terraform Apply
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-        run: |
-          terraform apply -auto-approve
-          git config --global user.email "github-actions@github.com"
-          git config --global user.name "GitHub Actions"
-          git add .
-          git commit -m "terraform ci test#${{ needs.check-previous-run.outputs.run-number }}"
-          git push
+        run: terraform apply -auto-approve
 
   vpc:
     needs: [check-previous-run, dynamodb]
@@ -122,13 +116,7 @@ jobs:
         run: terraform plan
       - name: Terraform Apply
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-        run: |
-          terraform apply -auto-approve
-          git config --global user.email "github-actions@github.com"
-          git config --global user.name "GitHub Actions"
-          git add .
-          git commit -m "terraform ci test#${{ needs.check-previous-run.outputs.run-number }}"
-          git push
+        run: terraform apply -auto-approve
 
   eks:
     needs: [check-previous-run, vpc]
@@ -154,13 +142,7 @@ jobs:
         run: terraform plan
       - name: Terraform Apply
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-        run: |
-          terraform apply -auto-approve
-          git config --global user.email "github-actions@github.com"
-          git config --global user.name "GitHub Actions"
-          git add .
-          git commit -m "terraform ci test#${{ needs.check-previous-run.outputs.run-number }}"
-          git push
+        run: terraform apply -auto-approve
 
   jenkins:
     needs: [check-previous-run, vpc]
@@ -186,13 +168,7 @@ jobs:
         run: terraform plan
       - name: Terraform Apply
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-        run: |
-          terraform apply -auto-approve
-          git config --global user.email "github-actions@github.com"
-          git config --global user.name "GitHub Actions"
-          git add .
-          git commit -m "terraform ci test#${{ needs.check-previous-run.outputs.run-number }}"
-          git push
+        run: terraform apply -auto-approve
 
   basic-infra:
     needs: [check-previous-run, eks]
@@ -218,13 +194,7 @@ jobs:
         run: terraform plan
       - name: Terraform Apply
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-        run: |
-          terraform apply -auto-approve
-          git config --global user.email "github-actions@github.com"
-          git config --global user.name "GitHub Actions"
-          git add .
-          git commit -m "terraform ci test#${{ needs.check-previous-run.outputs.run-number }}"
-          git push
+        run: terraform apply -auto-approve
 
   log-monitoring:
     needs: [check-previous-run, eks]
@@ -250,10 +220,20 @@ jobs:
         run: terraform plan
       - name: Terraform Apply
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        run: terraform apply -auto-approve
+
+  commit-changes:
+    needs: [check-previous-run, dynamodb, vpc, eks, jenkins, basic-infra, log-monitoring]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure Git
         run: |
-          terraform apply -auto-approve
           git config --global user.email "github-actions@github.com"
           git config --global user.name "GitHub Actions"
+      - name: Commit and Push Changes
+        run: |
           git add .
           git commit -m "terraform ci test#${{ needs.check-previous-run.outputs.run-number }}"
           git push 
