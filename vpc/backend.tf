@@ -4,6 +4,6 @@ terraform {
     key            = "terraform/state/vpc/terraform.tfstate"
     region         = "ap-northeast-2"
     encrypt        = true
-    profile        = "zoochacha"
+    dynamodb_table = "terraform-lock"
   }
 } 

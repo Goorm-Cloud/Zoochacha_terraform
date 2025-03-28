@@ -26,6 +26,10 @@ resource "aws_vpc" "this" {
   tags = {
     Name = "zoochacha-vpc"
   }
+
+  lifecycle {
+    create_before_destroy = false
+  }
 }
 
 # Internet Gateway
@@ -34,6 +38,10 @@ resource "aws_internet_gateway" "this" {
 
   tags = {
     Name = "zoochacha-eks-igw"
+  }
+
+  lifecycle {
+    create_before_destroy = true
   }
 }
 
@@ -47,6 +55,10 @@ resource "aws_subnet" "pub_sub1" {
     Name = "zoochacha-pub-sub1"
     Type = "public"
   }
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 # Public Subnet 2
@@ -58,6 +70,10 @@ resource "aws_subnet" "pub_sub2" {
   tags = {
     Name = "zoochacha-pub-sub2"
     Type = "public"
+  }
+
+  lifecycle {
+    create_before_destroy = true
   }
 }
 
@@ -71,6 +87,10 @@ resource "aws_subnet" "pri_sub1" {
     Name = "zoochacha-pri-sub1"
     Type = "private"
   }
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 # Private Subnet 2
@@ -82,6 +102,10 @@ resource "aws_subnet" "pri_sub2" {
   tags = {
     Name = "zoochacha-pri-sub2"
     Type = "private"
+  }
+
+  lifecycle {
+    create_before_destroy = true
   }
 }
 
@@ -126,7 +150,7 @@ resource "aws_route_table" "pub_rt" {
   }
 
   lifecycle {
-    create_before_destroy = false
+    create_before_destroy = true
   }
 }
 
@@ -144,7 +168,7 @@ resource "aws_route_table" "pri_rt" {
   }
 
   lifecycle {
-    create_before_destroy = false
+    create_before_destroy = true
   }
 }
 
@@ -155,7 +179,7 @@ resource "aws_route_table_association" "pub_sub1_association" {
 
   depends_on = [aws_route_table.pub_rt, aws_subnet.pub_sub1]
   lifecycle {
-    create_before_destroy = false
+    create_before_destroy = true
   }
 }
 
@@ -166,7 +190,7 @@ resource "aws_route_table_association" "pub_sub2_association" {
 
   depends_on = [aws_route_table.pub_rt, aws_subnet.pub_sub2]
   lifecycle {
-    create_before_destroy = false
+    create_before_destroy = true
   }
 }
 
@@ -177,7 +201,7 @@ resource "aws_route_table_association" "pri_sub1_association" {
 
   depends_on = [aws_route_table.pri_rt, aws_subnet.pri_sub1]
   lifecycle {
-    create_before_destroy = false
+    create_before_destroy = true
   }
 }
 
@@ -188,7 +212,7 @@ resource "aws_route_table_association" "pri_sub2_association" {
 
   depends_on = [aws_route_table.pri_rt, aws_subnet.pri_sub2]
   lifecycle {
-    create_before_destroy = false
+    create_before_destroy = true
   }
 }
 
@@ -248,8 +272,10 @@ resource "aws_security_group" "eks-vpc-pub-sg" {
   }
 
   lifecycle {
-    create_before_destroy = true
+    create_before_destroy = false
   }
+
+  depends_on = [aws_vpc.this]
 }
 
 
