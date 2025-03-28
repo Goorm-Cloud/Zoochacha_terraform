@@ -50,19 +50,19 @@ jobs:
           fi
           echo "Last successful job: $PREVIOUS_RUN"
 
-  notify-failure:
-    needs: [check-previous-run, dynamodb, vpc, eks, jenkins, basic-infra, log-monitoring]
-    if: failure()
-    runs-on: ubuntu-latest
-    steps:
-      - name: Send Discord Notification
-        run: |
-          curl -X POST ${{ secrets.DISCORD_WEBHOOK_URL }} \
-          -H "Content-Type: application/json" \
-          -d "{\"content\": \"🚨 **Terraform 배포 실패**\n실행 번호: #${{ needs.check-previous-run.outputs.run-number }}\n실패한 작업: ${{ github.job }}\n상세 내용: ${{ github.event.head_commit.message }}\n\n[실행 상세 보기](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${{ github.run_id }})\"}"
-        env:
-          GITHUB_SERVER_URL: ${{ github.server_url }}
-          GITHUB_REPOSITORY: ${{ github.repository }}
+#  notify-failure:
+#    needs: [check-previous-run, dynamodb, vpc, eks, jenkins, basic-infra, log-monitoring]
+#    if: failure()
+#    runs-on: ubuntu-latest
+#    steps:
+#      - name: Send Discord Notification
+#        run: |
+#          curl -X POST ${{ secrets.DISCORD_WEBHOOK_URL }} \
+#          -H "Content-Type: application/json" \
+#          -d "{\"content\": \"🚨 **Terraform 배포 실패**\n실행 번호: #${{ needs.check-previous-run.outputs.run-number }}\n실패한 작업: ${{ github.job }}\n상세 내용: ${{ github.event.head_commit.message }}\n\n[실행 상세 보기](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${{ github.run_id }})\"}"
+#        env:
+#          GITHUB_SERVER_URL: ${{ github.server_url }}
+#          GITHUB_REPOSITORY: ${{ github.repository }}
 
   dynamodb:
     needs: check-previous-run
@@ -113,10 +113,21 @@ jobs:
       - name: Terraform Init
         run: terraform init
       - name: Terraform Plan
-        run: terraform plan -parallelism=20
+        run: |
+          terraform plan \
+            -parallelism=20 \
+            -lock=false \
+            -var="vpc_id=$(terraform output -state=../vpc/terraform.tfstate -raw vpc_id)" \
+            -var="private_subnet_ids=$(terraform output -state=../vpc/terraform.tfstate -json private_subnet_ids)" \
+            -var="public_subnet_ids=$(terraform output -state=../vpc/terraform.tfstate -json public_subnet_ids)"
       - name: Terraform Apply
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-        run: terraform apply -auto-approve
+        run: |
+          terraform apply -auto-approve \
+            -lock=false \
+            -var="vpc_id=$(terraform output -state=../vpc/terraform.tfstate -raw vpc_id)" \
+            -var="private_subnet_ids=$(terraform output -state=../vpc/terraform.tfstate -json private_subnet_ids)" \
+            -var="public_subnet_ids=$(terraform output -state=../vpc/terraform.tfstate -json public_subnet_ids)"
 
   eks:
     needs: [check-previous-run, vpc]
