@@ -12,9 +12,15 @@ provider "aws" {
   region = var.aws_region
 }
 
-# VPC 데이터 소스
-data "aws_vpc" "selected" {
-  id = var.vpc_id
+# VPC 상태 참조
+data "terraform_remote_state" "vpc" {
+  backend = "s3"
+  config = {
+    bucket  = "zoochacha-permanent-store"
+    key     = "terraform/state/vpc/terraform.tfstate"
+    region  = "ap-northeast-2"
+    profile = "zoochacha"
+  }
 }
 
 # 기존 IAM 역할 참조
@@ -33,7 +39,7 @@ resource "aws_eks_cluster" "this" {
   bootstrap_self_managed_addons = false
 
   vpc_config {
-    subnet_ids = concat(var.private_subnet_ids, var.public_subnet_ids)
+    subnet_ids = concat(data.terraform_remote_state.vpc.outputs.private_subnet_ids, data.terraform_remote_state.vpc.outputs.public_subnet_ids)
     endpoint_private_access = true
     endpoint_public_access  = true
   }
@@ -64,7 +70,7 @@ resource "aws_eks_node_group" "this" {
   cluster_name    = aws_eks_cluster.this.name
   node_group_name = "zoochacha-node-group-medium"
   node_role_arn   = data.aws_iam_role.eks_node_group_role.arn
-  subnet_ids      = var.private_subnet_ids
+  subnet_ids      = data.terraform_remote_state.vpc.outputs.private_subnet_ids
   instance_types  = ["t3.medium"]
   disk_size      = 20
 
